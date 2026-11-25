@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Superspecial Isogeny Graphs</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #fbfaf7; --panel: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e4e2dc;
+    --edge: 60, 60, 70; --accent: #c2410c; --highlight: #0f766e;
+    --c0: #2563eb; --c1: #d97706; --c2: #16a34a; --c3: #db2777; --c4: #7c3aed; --c5: #0891b2; --c6: #65a30d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa2; --line: #2e2e33;
+      --edge: 200, 200, 210; --accent: #fb923c; --highlight: #2dd4bf;
+      --c0: #60a5fa; --c1: #fbbf24; --c2: #4ade80; --c3: #f472b6; --c4: #a78bfa; --c5: #22d3ee; --c6: #a3e635;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141416; --panel: #1c1c1f; --ink: #ececef; --muted: #9a9aa2; --line: #2e2e33;
+    --edge: 200, 200, 210; --accent: #fb923c; --highlight: #2dd4bf;
+    --c0: #60a5fa; --c1: #fbbf24; --c2: #4ade80; --c3: #f472b6; --c4: #a78bfa; --c5: #22d3ee; --c6: #a3e635;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; display: flex; }
+  #side { width: 340px; min-width: 340px; height: 100vh; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); padding: 18px 18px 40px; }
+  #stage { flex: 1; position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  h1 { font-size: 17px; margin: 0 0 2px; letter-spacing: -0.01em; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 22px 0 8px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+  select, input { width: 100%; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-top: 8px; }
+  .seg button { flex: 1; border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; padding: 6px 4px; cursor: pointer; }
+  .seg button.on { background: var(--ink); color: var(--panel); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+  td { padding: 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:last-child { text-align: right; }
+  .legend div { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 2px 0; }
+  .legend .count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .sw { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  #info .empty { color: var(--muted); font-size: 12.5px; }
+  #info .nb { cursor: pointer; }
+  #info .nb:hover td { color: var(--highlight); }
+  .ok { color: var(--highlight); }
+  #tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: none; max-width: 260px; }
+  #hint { position: absolute; right: 14px; bottom: 10px; color: var(--muted); font-size: 12px; }
+  label.check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+  label.check input { width: auto; }
+  @media (max-width: 760px) {
+    body { flex-direction: column; }
+    #side { width: 100%; min-width: 0; height: auto; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; }
+    #stage { height: 55vh; flex: none; }
+  }
+</style>
+</head>
+<body>
+<div id="side">
+  <h1>Superspecial isogeny graphs</h1>
+  <div class="sub">Principally polarised superspecial abelian varieties over F<sub>p&sup2;</sub> and their (&ell;,&hellip;,&ell;)-isogenies, searched from E<sub>0</sub><sup>g</sup> with Hermitian O-lattices. Colour is the decomposition into indecomposable factors; a ring marks a Weil structure; a dot in the middle means defined over F<sub>p</sub>.</div>
+  <select id="pick"></select>
+
+  <h2>Layout</h2>
+  <div class="seg" id="layout">
+    <button data-v="force" class="on">Force</button>
+    <button data-v="rings">Rings from E<sub>0</sub><sup>g</sup></button>
+  </div>
+  <label class="check"><input type="checkbox" id="showEdges" checked> draw edges</label>
+  <label class="check" id="typeOneRow" style="display:none"><input type="checkbox" id="typeOne"> type I graph: type I vertices and the middle steps (|K &cap; A[1+i]| = 4) between them</label>
+  <div class="row"><input id="search" placeholder="find a vertex by name or number"></div>
+
+  <h2>Legend</h2>
+  <div class="legend" id="legend"></div>
+
+  <h2>Vertex</h2>
+  <div id="info"></div>
+
+  <h2>Graph</h2>
+  <table id="stats"></table>
+</div>
+<div id="stage">
+  <canvas id="canvas"></canvas>
+  <div id="tip"></div>
+  <div id="hint">scroll to zoom &middot; drag to move &middot; click a vertex</div>
+</div>
+
+<script>
+const GRAPHS = /*GRAPH_DATA*/[];
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const tip = document.getElementById("tip");
+let state = { graph: null, nodes: [], links: [], sim: null, transform: d3.zoomIdentity, selected: null, hover: null,
+              layout: "force", showEdges: true, typeOne: false, hoverLink: null, adjacency: null };
+
+// ============================================================
+// Colours
+// ============================================================
+
+function categorical(i) { return css(`--c${i % 7}`); }
+
+function decompositionColour(graph) {
+  const types = graph.types.map(t => t[0]);
+  return v => categorical(types.indexOf(v.type));
+}
+
+// In the type I view only type I vertices, and the middle steps between them (|K cap A[1+i]| = 4), are drawn
+const typeOneView = () => state.typeOne && state.graph.structure === "weil";
+const faded = v => typeOneView() && v.weil !== "I";
+// (files saved before the kernels were classified have no middle steps: fall back to all type I - type I edges)
+const middleSteps = () => typeOneView() && state.graph.hasClasses;
+const hidden = l => typeOneView() && ((middleSteps() && l.mab + l.mba === 0) || faded(l.source) || faded(l.target));
+// the multiplicities shown for an edge seen from vertex v: all kernels, or only the middle steps
+const counts = (l, v) => {
+  const [ab, ba] = middleSteps() ? [l.mab, l.mba] : [l.ab, l.ba];
+  return l.source === v ? [ab, ba] : [ba, ab];
+};
+
+// Weil structures: "I, II, II" or "none". A solid ring if one of them has type I, dashed if
+// they are all of type II.
+const weilKind = v => v.weil === "none" ? null : (v.weil.split(", ").includes("I") ? "I" : "II");
+
+// ============================================================
+// Loading a graph
+// ============================================================
+
+function load(graph) {
+  if (state.sim) state.sim.stop();
+  state.graph = graph;
+  state.selected = null;
+  const n = graph.vertices.length;
+  const maxAut = d3.max(graph.vertices, v => v.aut);
+  state.nodes = graph.vertices.map(v => ({ ...v, r: 3 + 7 * Math.log(v.aut) / Math.log(Math.max(maxAut, 3)) }));
+  state.links = graph.links.filter(l => l[0] !== l[1])
+    .map(([a, b, ab, ba, mab, mba]) => ({ source: a, target: b, ab, ba, mab: mab || 0, mba: mba || 0, weight: ab + ba }));
+  state.adjacency = Array.from({ length: n }, () => []);
+  for (const l of state.links) { state.adjacency[l.source].push(l); state.adjacency[l.target].push(l); }
+  state.maxWeight = d3.max(state.links, l => l.weight) || 1;
+
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const spread = Math.sqrt(n) * 28;
+  state.sim = d3.forceSimulation(state.nodes)
+    .force("link", d3.forceLink(state.links).id(d => d.id).distance(30).strength(l => 0.15 + 0.6 * l.weight / state.maxWeight))
+    .force("charge", d3.forceManyBody().strength(-60 - 400 / Math.sqrt(n)))
+    .force("collide", d3.forceCollide(d => d.r + 1.5))
+    .on("tick", draw);
+  {
+    applyLayout(spread);
+  }
+
+  document.getElementById("typeOneRow").style.display = graph.structure === "weil" ? "flex" : "none";
+  renderStats(graph);
+  renderLegend();
+  renderInfo();
+}
+
+function fit() {
+  // zoom so that the whole graph fills the canvas
+  const xs = state.nodes.map(v => v.x), ys = state.nodes.map(v => v.y);
+  const [x0, x1, y0, y1] = [d3.min(xs), d3.max(xs), d3.min(ys), d3.max(ys)];
+  const w = canvas.clientWidth, h = canvas.clientHeight, pad = 40;
+  const k = Math.min(4, (w - 2 * pad) / Math.max(x1 - x0, 1), (h - 2 * pad) / Math.max(y1 - y0, 1));
+  const t = d3.zoomIdentity.translate(w / 2 - k * (x0 + x1) / 2, h / 2 - k * (y0 + y1) / 2).scale(k);
+  d3.select(canvas).call(zoom.transform, t);
+}
+
+function applyLayout(spread) {
+  const sim = state.sim;
+  spread = spread || Math.sqrt(state.nodes.length) * 28;
+  const linkStrength = l => 0.15 + 0.6 * l.weight / state.maxWeight;
+  if (state.layout === "rings") {
+    // vertices at distance d from E0^g on the circle of radius d; the links only arrange them around each circle
+    const maxD = d3.max(state.nodes, v => v.distance) || 1;
+    sim.force("radial", d3.forceRadial(d => (d.distance / maxD) * spread, 0, 0).strength(1))
+       .force("x", null).force("y", null);
+    sim.force("link").strength(l => 0.02 * linkStrength(l));
+  } else {
+    sim.force("radial", null).force("x", d3.forceX(0).strength(0.04)).force("y", d3.forceY(0).strength(0.04));
+    sim.force("link").strength(linkStrength);
+  }
+  // run most of the layout before showing it, zoom to fit, then let it settle live
+  sim.stop().alpha(1);
+  sim.tick(state.nodes.length > 600 ? 120 : 300);
+  fit();
+  sim.alpha(0.15).restart();
+}
+
+// ============================================================
+// Drawing
+// ============================================================
+
+function resize() {
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = canvas.clientWidth * ratio;
+  canvas.height = canvas.clientHeight * ratio;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  draw();
+}
+
+function draw() {
+  if (!state.graph) return;
+  const { transform: t, nodes, links, selected } = state;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.save();
+  ctx.clearRect(0, 0, w, h);
+  ctx.translate(t.x, t.y);
+  ctx.scale(t.k, t.k);
+  const edge = css("--edge");
+  const near = selected ? new Set(state.adjacency[selected.id].flatMap(l => [l.source.id, l.target.id])) : null;
+
+  if (state.showEdges) {
+    // all edges the same width; the multiplicities are shown on hover and around the selected vertex
+    for (const l of links) {
+      if (hidden(l)) continue;
+      const away = faded(l.source) || faded(l.target);
+      const on = ((selected && (l.source === selected || l.target === selected)) || l === state.hoverLink) && !away;
+      const alpha = on ? 0.9 : (selected || away ? 0.04 : 0.22);
+      ctx.strokeStyle = on ? css("--highlight") : `rgba(${edge}, ${alpha})`;
+      ctx.lineWidth = (on ? 1.8 : 0.8) / t.k;
+      ctx.beginPath();
+      ctx.moveTo(l.source.x, l.source.y);
+      ctx.lineTo(l.target.x, l.target.y);
+      ctx.stroke();
+    }
+  }
+  const colour = decompositionColour(state.graph);
+  for (const v of nodes) {
+    const dim = (near && !near.has(v.id)) || faded(v);
+    ctx.globalAlpha = dim ? 0.15 : 1;
+    const r = v.r / t.k;  // vertex sizes are constant on screen
+    ctx.fillStyle = colour(v);
+    ctx.beginPath();
+    ctx.arc(v.x, v.y, r, 0, 2 * Math.PI);
+    ctx.fill();
+    if (v.overFp) {  // defined over F_p: a dot in the middle
+      ctx.fillStyle = css("--panel");
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, Math.max(1.2, r * t.k * 0.38) / t.k, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    const kind = weilKind(v);
+    if (kind) {
+      ctx.strokeStyle = css("--ink");
+      ctx.lineWidth = 1.6 / t.k;
+      ctx.setLineDash(kind === "I" ? [] : [2.5 / t.k, 2 / t.k]);
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, r + 2.8 / t.k, 0, 2 * Math.PI);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (v === selected || v === state.hover) {
+      ctx.strokeStyle = v === selected ? css("--accent") : css("--muted");
+      ctx.lineWidth = 2.2 / t.k;
+      ctx.beginPath();
+      ctx.arc(v.x, v.y, r + 6 / t.k, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    if (v.id === state.graph.start) {
+      ctx.fillStyle = css("--ink");
+      ctx.font = `${12 / t.k}px -apple-system, sans-serif`;
+      const power = String(state.graph.g).split("").map(d => "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079"[+d]).join("");
+      const label = "E\u2080" + power;
+      ctx.fillText(label, v.x + r + 5 / t.k, v.y - r - 2 / t.k);
+    }
+  }
+  ctx.globalAlpha = 1;
+  if (selected) {
+    // multiplicities "out . back" on the edges of the selected vertex, two thirds of the way out
+    ctx.font = `${11 / t.k}px ui-monospace, Menlo, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const l of state.adjacency[selected.id]) {
+      const other = l.source === selected ? l.target : l.source;
+      if (hidden(l) || faded(selected)) continue;
+      const [out, back] = counts(l, selected);
+      const x = selected.x + (other.x - selected.x) * 0.62, y = selected.y + (other.y - selected.y) * 0.62;
+      const text = `${out}\u00b7${back}`;
+      const w = ctx.measureText(text).width + 6 / t.k;
+      ctx.fillStyle = css("--panel");
+      ctx.fillRect(x - w / 2, y - 8 / t.k, w, 16 / t.k);
+      ctx.fillStyle = css("--ink");
+      ctx.fillText(text, x, y);
+    }
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
+  }
+  ctx.restore();
+}
+
+// ============================================================
+// Interaction
+// ============================================================
+
+const zoom = d3.zoom().scaleExtent([0.05, 12]).on("zoom", e => { state.transform = e.transform; draw(); });
+d3.select(canvas).call(zoom).on("dblclick.zoom", null);
+
+function nodeAt(event) {
+  const [mx, my] = d3.pointer(event, canvas);
+  const [x, y] = state.transform.invert([mx, my]);
+  let best = null, bestD = Infinity;
+  for (const v of state.nodes) {
+    const d = Math.hypot(v.x - x, v.y - y);
+    if (d < (v.r + 4) / state.transform.k && d < bestD) { best = v; bestD = d; }
+  }
+  return best;
+}
+
+function linkAt(event) {
+  // the edge closest to the pointer, if it is within a few pixels
+  if (!state.showEdges) return null;
+  const [mx, my] = d3.pointer(event, canvas);
+  const [x, y] = state.transform.invert([mx, my]);
+  const reach = 4 / state.transform.k;
+  let best = null, bestD = reach;
+  for (const l of state.links) {
+    if (state.selected && l.source !== state.selected && l.target !== state.selected) continue;
+    if (hidden(l) || faded(l.source) || faded(l.target)) continue;
+    const dx = l.target.x - l.source.x, dy = l.target.y - l.source.y;
+    const s = Math.max(0, Math.min(1, ((x - l.source.x) * dx + (y - l.source.y) * dy) / (dx * dx + dy * dy || 1)));
+    const d = Math.hypot(l.source.x + s * dx - x, l.source.y + s * dy - y);
+    if (d < bestD) { best = l; bestD = d; }
+  }
+  return best;
+}
+
+d3.select(canvas)
+  .call(d3.drag()
+    .subject(e => { const v = nodeAt(e.sourceEvent); return v ? v : null; })
+    .on("start", e => { if (!e.active) state.sim.alphaTarget(0.2).restart(); e.subject.fx = e.subject.x; e.subject.fy = e.subject.y; })
+    .on("drag", e => { const [x, y] = state.transform.invert(d3.pointer(e.sourceEvent, canvas)); e.subject.fx = x; e.subject.fy = y; })
+    .on("end", e => { if (!e.active) state.sim.alphaTarget(0); e.subject.fx = null; e.subject.fy = null; }))
+  .on("mousemove", e => {
+    const v = nodeAt(e);
+    const l = v ? null : linkAt(e);
+    if (v !== state.hover || l !== state.hoverLink) { state.hover = v; state.hoverLink = l; draw(); }
+    if (l) {
+      const [mx, my] = d3.pointer(e, canvas.parentNode);
+      tip.style.display = "block";
+      tip.style.left = Math.min(mx + 14, canvas.clientWidth - 270) + "px";
+      tip.style.top = (my + 14) + "px";
+      const [ab, ba] = counts(l, l.source), what = middleSteps() ? "middle steps" : "kernels";
+      tip.innerHTML = `<span class="mono">${l.source.name} &rarr; ${l.target.name}</span>: <b>${ab}</b> ${what}<br>` +
+                      `<span class="mono">${l.target.name} &rarr; ${l.source.name}</span>: <b>${ba}</b> ${what}`;
+      return;
+    }
+    if (v) {
+      const [mx, my] = d3.pointer(e, canvas.parentNode);
+      tip.style.display = "block";
+      tip.style.left = Math.min(mx + 14, canvas.clientWidth - 270) + "px";
+      tip.style.top = (my + 14) + "px";
+      tip.innerHTML = `<b>${v.type}</b>${state.graph.g % 2 ? "" : `<br>Weil structures: ${v.weil}`}<br><span class="mono" style="color:var(--muted)">${v.name} &middot; |Aut| = ${v.aut}</span>`;
+    } else tip.style.display = "none";
+  })
+  .on("mouseleave", () => { tip.style.display = "none"; state.hover = null; state.hoverLink = null; draw(); })
+  .on("click", e => { select(nodeAt(e)); });
+
+function select(v) {
+  state.selected = v;
+  renderInfo();
+  draw();
+}
+
+// ============================================================
+// Side panel
+// ============================================================
+
+function renderStats(graph) {
+  document.getElementById("stats").innerHTML = Object.entries(graph.stats)
+    .map(([k, v]) => `<tr><td>${k}</td><td class="mono">${v}</td></tr>`).join("");
+}
+
+function renderLegend() {
+  const graph = state.graph;
+  const colour = decompositionColour(graph);
+  let html = graph.types.map(([t, c]) => {
+    const v = graph.vertices.find(x => x.type === t);
+    return `<div><span class="sw" style="background:${colour(v)}"></span>${t}<span class="count">${c}</span></div>`;
+  }).join("");
+  const fp = graph.vertices.filter(v => v.overFp).length;
+  html += `<div style="margin-top:8px"><svg width="15" height="15" viewBox="0 0 15 15" style="flex:none"><circle cx="7.5" cy="7.5" r="6" fill="var(--muted)"/><circle cx="7.5" cy="7.5" r="2.3" fill="var(--panel)"/></svg><span>defined over F<sub>p</sub></span><span class="count">${fp}</span></div>`;
+  if (graph.g % 2 === 0) {
+    const count = kind => graph.vertices.filter(v => weilKind(v) === kind).length;
+    const ring = dash => `<svg width="15" height="15" viewBox="0 0 15 15" style="flex:none"><circle cx="7.5" cy="7.5" r="6" fill="none" stroke="currentColor" stroke-width="1.6" ${dash ? 'stroke-dasharray="2.5 2"' : ""}/></svg>`;
+    if (graph.structure === "type1") {  // every vertex is a pair (A, J) with J of type I
+      html += `<div style="margin-top:8px">${ring(false)}J of type I (all vertices)<span class="count">${count("I")}</span></div>`;
+    } else if (graph.structure === "weil") {  // every vertex is a pair (A, J)
+      if (state.typeOne && !graph.hasClasses)
+        html += `<div style="margin-top:8px;color:var(--muted)">this file has no kernel classes, so all type I edges are shown (re-save it with storage.py p --weil)</div>`;
+      html += `<div style="margin-top:8px">${ring(false)}J of type I<span class="count">${count("I")}</span></div>`;
+      html += `<div>${ring(true)}J of type II<span class="count">${count("II")}</span></div>`;
+    } else {
+      html += `<div style="margin-top:8px">${ring(false)}has a type I Weil structure<span class="count">${count("I")}</span></div>`;
+      html += `<div>${ring(true)}Weil structures of type II only<span class="count">${count("II")}</span></div>`;
+      html += `<div><span style="width:15px;flex:none"></span>no Weil structure<span class="count">${count(null)}</span></div>`;
+    }
+  }
+  document.getElementById("legend").innerHTML = html;
+}
+
+function renderInfo() {
+  const box = document.getElementById("info");
+  const v = state.selected;
+  if (!v) {
+    box.innerHTML = `<div class="empty">Hover or click a vertex. Larger vertices have more automorphisms.</div>`;
+    return;
+  }
+  const rows = state.adjacency[v.id].filter(l => !hidden(l)).map(l => {
+    const other = l.source === v ? l.target : l.source;
+    const [out, back] = counts(l, v);
+    return { other, out, back };
+  }).sort((a, b) => b.out - a.out || a.other.id - b.other.id);
+  const loops = middleSteps() ? v.middleLoops : v.loops;
+  const total = rows.reduce((s, r) => s + r.out, 0) + loops;
+  // m(v, w) |Aut w| = m(w, v) |Aut v|: each isogeny and its dual, counted up to automorphisms on either side
+  const balanced = rows.every(r => r.out * r.other.aut === r.back * v.aut);
+  box.innerHTML = `
+    <table>
+      <tr><td>name</td><td class="mono">${v.name}</td></tr>
+      <tr><td>vertex</td><td class="mono">#${v.id}${v.id === state.graph.start ? " (E0^g)" : ""}</td></tr>
+      <tr><td>type</td><td>${v.type}</td></tr>
+      <tr><td>|Aut|</td><td class="mono">${v.aut}</td></tr>
+      <tr><td>defined over F_p</td><td>${v.overFp ? "yes" : `no: twist <span class="mono nb-link" data-id="${v.frobenius}" style="cursor:pointer;text-decoration:underline">${state.nodes[v.frobenius] ? state.nodes[v.frobenius].name : "?"}</span>`}</td></tr>
+      ${state.graph.g % 2 ? "" : `<tr><td>Weil structures</td><td>${v.weil}</td></tr>`}
+      <tr><td>distance from E0^g</td><td class="mono">${v.distance}</td></tr>
+      <tr><td>${middleSteps() ? "middle steps" : "kernels"} to itself (loops)</td><td class="mono">${loops}</td></tr>
+      <tr><td>${middleSteps() ? "middle steps" : "kernels"} in total</td><td class="mono">${total}</td></tr>
+      <tr><td>m(v,w)|Aut w| = m(w,v)|Aut v|</td><td class="${balanced ? "ok" : ""}">${balanced ? "holds" : "fails"}</td></tr>
+    </table>
+    <h2>${rows.length} neighbours</h2>
+    <table>
+      <tr><td><b>vertex</b></td><td><b>out &middot; back</b></td></tr>
+      ${rows.map(r => `<tr class="nb" data-id="${r.other.id}"><td><span class="mono">${r.other.name}</span> <span style="color:var(--muted)">${r.other.type}</span></td><td class="mono">${r.out} &middot; ${r.back}</td></tr>`).join("")}
+    </table>`;
+  box.querySelectorAll(".nb, .nb-link").forEach(el => el.addEventListener("click", () => select(state.nodes[+el.dataset.id])));
+}
+
+// ============================================================
+// Controls
+// ============================================================
+
+function segmented(id, key, after) {
+  // a row of buttons choosing one value of state[key]
+  const el = document.getElementById(id);
+  el.addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    el.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    state[key] = b.dataset.v;
+    after();
+  });
+}
+segmented("layout", "layout", () => applyLayout());
+document.getElementById("showEdges").addEventListener("change", e => { state.showEdges = e.target.checked; draw(); });
+document.getElementById("typeOne").addEventListener("change", e => { state.typeOne = e.target.checked; renderLegend(); renderInfo(); draw(); });
+document.getElementById("search").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  if (!q) return;
+  const v = state.nodes.find(v => v.name.toLowerCase().startsWith(q) || String(v.id) === q.replace("#", ""));
+  if (v) select(v);
+});
+
+const pick = document.getElementById("pick");
+GRAPHS.forEach((G, i) => { const o = document.createElement("option"); o.value = i; o.textContent = `${G.title}  (${G.vertices.length} vertices)`; pick.appendChild(o); });
+pick.addEventListener("change", () => load(GRAPHS[+pick.value]));
+window.addEventListener("resize", resize);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { renderLegend(); draw(); });
+
+resize();
+if (GRAPHS.length) {
+  const initial = Math.max(0, GRAPHS.findIndex(G => G.g === 4));  // open on dimension four if there is one
+  pick.value = initial;
+  load(GRAPHS[initial]);
+}
+</script>
+</body>
+</html>

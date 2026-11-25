@@ -1,0 +1,1 @@
+{"method":"lattice","p":7,"g":1,"start":0,"mass":"1/4","mass_formula_ok":true,"vertices":[{"id":0,"name":"2fdb86274425","aut":4,"decomposition":[1],"frobenius":0,"over_Fp":true,"weil":[],"lattice":{"scale":1,"denominator":1,"basis":[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]}}],"edges":[[0,0,3]],"ell":2}
